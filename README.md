@@ -1,0 +1,1 @@
+This template describes a lambda function which triggers automatically on S3 CreateBucket event and checks if the tag AssetOwner/the entity that created the bucket is applied. If not, then it applies it based on the correct value of it

@@ -1,0 +1,131 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: 'AWS::Serverless-2016-10-31'
+Description: This sample template describes a lambda function which triggers
+  automatically on S3 CreateBucket event and checks for a specific tag/value
+  and applies it based on the correct value of it. (c) 2021 Amazon Web Services, Inc. or
+  its affiliates. All Rights Reserved. This AWS Content is provided subject to the
+  terms of the AWS Customer Agreement available at http://aws.amazon.com/agreement
+  or other written agreement between Customer and either Amazon Web Services, Inc.
+  or Amazon Web Services EMEA SARL or both.
+
+
+Resources:
+  rS32AutoTag:
+    Type: AWS::Serverless::Function
+    Properties:
+      InlineCode: |
+        import logging
+        import os
+        import re
+        import botocore.exceptions
+        import boto3
+
+        logger = logging.getLogger('tagging')
+        logger.setLevel(logging.INFO)
+
+        client = boto3.client('s3')
+
+        def _put_bucket_tag(bucketName, tags):
+            """
+            This function will apply the defined tags to the specified bucket
+            :param bucketName: bucketname
+            :param tags: list of tags dict
+            :return:
+            """
+            client.put_bucket_tagging(
+                Bucket=bucketName,
+                Tagging={
+                    'TagSet': tags
+                }
+            )
+
+
+        def _get_bucket_tags(bucketName):
+            """
+            This function will return all the tags present on the bucket specified
+            :param bucketName: bucketname
+            :return: list of tags dict
+            """
+            try:
+
+                response = client.get_bucket_tagging(
+                    Bucket=bucketName
+                )
+                tags = response['TagSet']
+                return tags
+            except botocore.exceptions.ClientError as error:
+                logger.info(error.response)
+                if error.response['Error']['Code'] == 'NoSuchTagSet':
+                    logger.info('No Tags presently added to the bucket')
+                    return_val = []
+                    return return_val
+                else:
+                    logger.error(f'Error: {error}')
+
+
+        def lambda_handler(event, context):
+            try:
+                logger.info(event)
+                asset_owner_tag_key = os.environ['TAG_KEY']
+                email_regex = '^[a-z0-9]+[\._-]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
+                owner_arn = event['detail']['userIdentity']['arn']
+                asset_owner = owner_arn.split('/')[-1]
+                logger.info(f'AssetOwner is: {asset_owner}')
+                bucket_name = event['detail']['requestParameters']['bucketName']
+                correct_tag = {'Key': asset_owner_tag_key, 'Value': asset_owner}
+                tags = _get_bucket_tags(bucket_name)
+
+                if not tags:
+                    logger.info(f'No Tags Present, adding {asset_owner_tag_key} tag')
+                    tags.append(correct_tag)
+                    _put_bucket_tag(bucket_name, tags)
+                else:
+                    tag_keys = []
+                    for val in tags:
+                        tag_keys.append(val.get("Key"))
+                        if asset_owner_tag_key in val.get("Key") and \
+                                not re.search(email_regex, val.get("Value")):
+                            logger.info(f"Tag {asset_owner_tag_key} present on "
+                                        f"{bucket_name} bucket but invalid email "
+                                        f"added, applying the correct value "
+                                        f"{asset_owner}")
+                            val.update(correct_tag)
+                            _put_bucket_tag(bucket_name, tags)
+                    if asset_owner_tag_key not in tag_keys:
+                        logger.info(f"No {asset_owner_tag_key} present on "
+                                    f"{bucket_name} bucket, adding it")
+                        tags.append(correct_tag)
+                        _put_bucket_tag(bucket_name, tags)
+            except Exception as err:
+                logger.error(f"Failed on adding the tag with exception: {err}")
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      Timeout: 900
+      MemorySize: 128
+      FunctionName: 'auto-tag-s3-function'
+      Environment:
+        Variables:
+          TAG_KEY: "AssetOwner"
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetBucketTagging
+                - s3:PutBucketTagging
+              Resource: 'arn:aws:s3:::*'
+      Events:
+        S3CreateBucket:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              detail-type:
+                - AWS API Call via CloudTrail
+              source:
+                - aws.s3
+              detail:
+                eventSource:
+                  - s3.amazonaws.com
+                eventName:
+                  - CreateBucket

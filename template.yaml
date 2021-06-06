@@ -3,12 +3,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: 'AWS::Serverless-2016-10-31'
 Description: This sample template describes a lambda function which triggers
   automatically on S3 CreateBucket event and checks for a specific tag/value
-  and applies it based on the correct value of it. (c) 2021 Amazon Web Services, Inc. or
-  its affiliates. All Rights Reserved. This AWS Content is provided subject to the
-  terms of the AWS Customer Agreement available at http://aws.amazon.com/agreement
-  or other written agreement between Customer and either Amazon Web Services, Inc.
-  or Amazon Web Services EMEA SARL or both.
-
+  and applies it based on the correct value of it.
 
 Resources:
   rS32AutoTag:

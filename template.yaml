@@ -61,9 +61,7 @@ Resources:
 
         def lambda_handler(event, context):
             try:
-                logger.info(event)
                 asset_owner_tag_key = os.environ['TAG_KEY']
-                email_regex = '^[a-z0-9]+[\._-]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
                 owner_arn = event['detail']['userIdentity']['arn']
                 asset_owner = owner_arn.split('/')[-1]
                 logger.info(f'AssetOwner is: {asset_owner}')
@@ -80,9 +78,9 @@ Resources:
                     for val in tags:
                         tag_keys.append(val.get("Key"))
                         if asset_owner_tag_key in val.get("Key") and \
-                                not re.search(email_regex, val.get("Value")):
+                                asset_owner != val.get("Value"):
                             logger.info(f"Tag {asset_owner_tag_key} present on "
-                                        f"{bucket_name} bucket but invalid email "
+                                        f"{bucket_name} bucket but invalid value "
                                         f"added, applying the correct value "
                                         f"{asset_owner}")
                             val.update(correct_tag)
